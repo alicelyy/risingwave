@@ -20,10 +20,22 @@
         packages =
           rust-toolchain
           ++ (with pkgs; [
+            gcc
+            lld
+
             gnumake
             cmake
+
+            pkg-config
             protobuf
           ]);
+
+        env = [
+          {
+            name = "LD_LIBRARY_PATH";
+            value = lib.makeLibraryPath (with pkgs; [ stdenv.cc.cc ]);
+          }
+        ];
       };
   };
 }
