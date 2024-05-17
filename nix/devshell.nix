@@ -15,19 +15,21 @@
             cargo-sort
             typos
           ];
+        inherit (pkgs.stdenv) isDarwin isLinux;
       in
       {
-        packages =
+        packages = with pkgs;
           rust-toolchain
-          ++ (with pkgs; [
-            gcc
-            lld
-
+          ++ [
             gnumake
             cmake
 
             pkg-config
             protobuf
+          ] ++ (lib.optionals isDarwin [
+            clang
+          ]) ++ (lib.optionals isLinux [
+            gcc
           ]);
 
         env = [
