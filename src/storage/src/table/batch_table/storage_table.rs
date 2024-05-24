@@ -107,7 +107,6 @@ pub struct StorageTableInner<S: StateStore, SD: ValueRowSerde> {
     /// in default order
     column_ids: Vec<ColumnId>,
     is_columnar_store: bool,
-    versioned: bool,
 }
 
 /// `StorageTable` will use [`EitherSerde`] as default so that we can support both versioned and
@@ -282,9 +281,7 @@ impl<S: StateStore> StorageTableInner<S, EitherSerde> {
         let column_ids = table_columns.iter().map(|c| c.column_id).collect_vec();
         let row_serde = {
             if versioned {
-                ColumnAwareSerde::new(value_output_indices.clone().into(), table_columns.into())
-                    .into()
-                // ColumnAwareSerde::new(value_indices.into(), table_columns.into()).into()
+                ColumnAwareSerde::new(value_indices.into(), table_columns.into()).into()
             } else {
                 BasicSerde::new(value_indices.into(), table_columns.into()).into()
             }
@@ -311,7 +308,6 @@ impl<S: StateStore> StorageTableInner<S, EitherSerde> {
             read_prefix_len_hint,
             column_ids,
             is_columnar_store,
-            versioned,
         }
     }
 }
@@ -391,13 +387,10 @@ impl<S: StateStore, SD: ValueRowSerde> StorageTableInner<S, SD> {
             // Refer to [`StorageTableInnerIterInner::new`] for necessity of `validate_read_epoch`.
             self.store.validate_read_epoch(wait_epoch)?;
             let full_row = self.row_serde.deserialize(&value)?;
-            let result_row_in_value = if self.versioned {
-                OwnedRow::new(full_row)
-            } else {
-                self.mapping
-                    .project(OwnedRow::new(full_row))
-                    .into_owned_row()
-            };
+            let result_row_in_value = self
+                .mapping
+                .project(OwnedRow::new(full_row))
+                .into_owned_row();
             match &self.key_output_indices {
                 Some(key_output_indices) => {
                     let result_row_in_key =
@@ -606,7 +599,6 @@ impl<S: StateStore, SD: ValueRowSerde> StorageTableInner<S, SD> {
                     table_key_range,
                     read_options,
                     wait_epoch,
-                    self.versioned,
                 )
                 .await?
                 .into_stream();
@@ -898,8 +890,6 @@ struct StorageTableInnerIterInner<S: StateStore, SD: ValueRowSerde> {
 
     /// used for deserializing key part of output row from pk.
     output_row_in_key_indices: Vec<usize>,
-
-    versioned: bool,
 }
 
 impl<S: StateStore, SD: ValueRowSerde> StorageTableInnerIterInner<S, SD> {
@@ -917,7 +907,6 @@ impl<S: StateStore, SD: ValueRowSerde> StorageTableInnerIterInner<S, SD> {
         table_key_range: TableKeyRange,
         read_options: ReadOptions,
         epoch: HummockReadEpoch,
-        versioned: bool,
     ) -> StorageResult<Self> {
         let raw_epoch = epoch.get_epoch();
         store.try_wait_epoch(epoch).await?;
@@ -936,7 +925,6 @@ impl<S: StateStore, SD: ValueRowSerde> StorageTableInnerIterInner<S, SD> {
             key_output_indices,
             value_output_indices,
             output_row_in_key_indices,
-            versioned,
         };
         Ok(iter)
     }
@@ -952,13 +940,10 @@ impl<S: StateStore, SD: ValueRowSerde> StorageTableInnerIterInner<S, SD> {
         {
             let (table_key, value) = (k.user_key.table_key, v);
             let full_row = self.row_deserializer.deserialize(value)?;
-            let result_row_in_value = if self.versioned {
-                OwnedRow::new(full_row)
-            } else {
-                self.mapping
-                    .project(OwnedRow::new(full_row))
-                    .into_owned_row()
-            };
+            let result_row_in_value = self
+                .mapping
+                .project(OwnedRow::new(full_row))
+                .into_owned_row();
             match &self.key_output_indices {
                 Some(key_output_indices) => {
                     let result_row_in_key = match self.pk_serializer.clone() {
