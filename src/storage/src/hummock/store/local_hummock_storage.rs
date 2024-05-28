@@ -513,6 +513,12 @@ impl LocalStateStore for LocalHummockStorage {
             "local state store of table id {:?} is init for more than once",
             self.table_id
         );
+        self.event_sender
+            .send(HummockEvent::InitEpoch {
+                instance_id: self.instance_id(),
+                init_epoch: options.epoch.curr,
+            })
+            .expect("should succeed");
         Ok(())
     }
 
@@ -547,8 +553,7 @@ impl LocalStateStore for LocalHummockStorage {
         self.event_sender
             .send(HummockEvent::LocalSealEpoch {
                 instance_id: self.instance_id(),
-                table_id: self.table_id,
-                epoch: prev_epoch,
+                next_epoch,
                 opts,
             })
             .expect("should be able to send")
@@ -629,7 +634,6 @@ impl LocalHummockStorage {
                 old_values,
                 size,
                 table_id,
-                instance_id,
                 Some(tracker),
             );
             self.spill_offset += 1;
@@ -639,7 +643,7 @@ impl LocalHummockStorage {
             // insert imm to uploader
             if !self.is_replicated {
                 self.event_sender
-                    .send(HummockEvent::ImmToUploader(imm))
+                    .send(HummockEvent::ImmToUploader { instance_id, imm })
                     .unwrap();
             }
             imm_size

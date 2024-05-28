@@ -559,7 +559,7 @@ impl StateStore for HummockStorage {
     async fn sync(&self, epoch: u64) -> StorageResult<SyncResult> {
         let (tx, rx) = oneshot::channel();
         self.hummock_event_sender
-            .send(HummockEvent::AwaitSyncEpoch {
+            .send(HummockEvent::SyncEpoch {
                 new_sync_epoch: epoch,
                 sync_result_sender: tx,
             })
@@ -581,12 +581,6 @@ impl StateStore for HummockStorage {
                 MemOrdering::SeqCst,
             );
         }
-        self.hummock_event_sender
-            .send(HummockEvent::SealEpoch {
-                epoch,
-                is_checkpoint,
-            })
-            .expect("should send success");
         StoreLocalStatistic::flush_all();
     }
 
