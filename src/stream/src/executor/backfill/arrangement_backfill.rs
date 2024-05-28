@@ -112,7 +112,6 @@ where
         let mut upstream_table = self.upstream_table;
         let vnodes = upstream_table.vnodes().clone();
         let rate_limit = self.rate_limit;
-        self.chunk_size = 1;
 
         // These builders will build data chunks.
         // We must supply them with the full datatypes which correspond to
@@ -557,7 +556,7 @@ where
 
                 // Adapt Rate Limit
                 if adaptive_rate_limit {
-                    Self::adapt_rate_limit_3(
+                    Self::adapt_rate_limit_2(
                         &self.actor_id,
                         &self.metrics,
                         threshold_barrier_latency,
