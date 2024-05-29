@@ -208,13 +208,20 @@ impl Parser<'_> {
                 .map_err(|e| {
                     // append SQL context to the error message, e.g.:
                     // LINE 1: SELECT 1::int(2);
-                    let loc = match tokens.get(e.offset()) {
-                        Some(token) => token.location.clone(),
-                        None => {
-                            // get location of EOF
-                            Location {
-                                line: sql.lines().count() as u64,
-                                column: sql.lines().last().map_or(0, |l| l.len() as u64) + 1,
+                    let mut offset = e.offset();
+                    let loc = loop {
+                        match tokens.get(offset) {
+                            Some(token) if matches!(token.token, Token::Whitespace(_)) => {
+                                offset += 1;
+                                continue;
+                            }
+                            Some(token) => break token.location.clone(),
+                            None => {
+                                // get location of EOF
+                                break Location {
+                                    line: sql.lines().count() as u64,
+                                    column: sql.lines().last().map_or(0, |l| l.len() as u64) + 1,
+                                };
                             }
                         }
                     };
