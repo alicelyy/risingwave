@@ -279,6 +279,72 @@ impl LevelCompactionPicker {
 
             return Some(result);
         }
+
+        if l0
+            .sub_levels
+            .iter()
+            .filter(|level| level.level_type() == LevelType::Nonoverlapping)
+            .count()
+            >= self.config.level0_sub_level_compact_level_count as usize * 2
+        {
+            let mut select_level_inputs = vec![];
+            let mut info = overlap_strategy.create_overlap_info();
+            let max_compaction_bytes = std::cmp::max(
+                target_level.total_file_size,
+                self.config.max_compaction_bytes,
+            );
+
+            let mut total_file_size = 0;
+            let mut total_file_count = 0;
+            for level in &l0.sub_levels {
+                if level_handlers[0].is_level_pending_compact(level)
+                    || total_file_size > max_compaction_bytes
+                {
+                    break;
+                }
+                for sst in &level.table_infos {
+                    info.update(sst);
+                }
+                select_level_inputs.push(InputLevel {
+                    level_idx: target_level.level_idx,
+                    level_type: target_level.level_type,
+                    table_infos: level.table_infos.clone(),
+                });
+                total_file_size += level.total_file_size;
+                total_file_count += level.table_infos.len();
+            }
+            let range = info.check_multiple_overlap(&target_level.table_infos);
+            let mut target_level_size = 0;
+            let mut pending_compact = false;
+            for sst in &target_level.table_infos[range.clone()] {
+                if level_handlers[target_level.level_idx as usize].is_pending_compact(&sst.sst_id) {
+                    pending_compact = true;
+                    break;
+                }
+
+                target_level_size += sst.file_size;
+            }
+            if !pending_compact && target_level_size < total_file_size {
+                select_level_inputs.reverse();
+                total_file_count += range.len();
+                select_level_inputs.push(InputLevel {
+                    level_idx: target_level.level_idx,
+                    level_type: target_level.level_type,
+                    table_infos: target_level.table_infos[range].to_vec(),
+                });
+                let result = CompactionInput {
+                    input_levels: select_level_inputs,
+                    target_level: self.target_level,
+                    select_input_size: total_file_size,
+                    target_input_size: target_level_size,
+                    total_file_count: total_file_count as u64,
+                    vnode_partition_count,
+                    ..Default::default()
+                };
+                return Some(result);
+            }
+        }
+
         None
     }
 }
